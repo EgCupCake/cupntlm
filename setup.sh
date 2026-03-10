@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════
-#  cupntlm — Kurulum Scripti
+#  cupntlm — Setup Script
 #  CVE-2025-33073 | NTLM Reflection Bypass
 #  Kali Linux / Debian / Ubuntu
 # ═══════════════════════════════════════════════════════════
@@ -21,34 +21,24 @@ hint()    { echo -e "${YELLOW}    → $1${NC}"; }
 
 echo -e "${CYAN}"
 echo "╔══════════════════════════════════════════════════╗"
-echo "║          cupntlm  |  Kurulum Scripti             ║"
+echo "║          cupntlm  |  Setup Script                ║"
 echo "║          CVE-2025-33073 NTLM Reflection          ║"
 echo "╚══════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
-# ── Dizin Hazırlığı ───────────────────────────────────────
+# ── Directory Setup ───────────────────────────────────────
 WORKDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXPLOITDIR="$WORKDIR/exploit"
 
-log "Çalışma dizini : $WORKDIR"
-log "Exploit dizini : $EXPLOITDIR"
+log "Working directory : $WORKDIR"
+log "Exploit directory : $EXPLOITDIR"
 
 mkdir -p "$EXPLOITDIR"
-success "exploit/ dizini hazır"
+success "exploit/ directory ready"
 
-# ── 1. apt update ─────────────────────────────────────────
+# ── 1. System Tools Check ─────────────────────────────────
 echo ""
-log "Paket listesi güncelleniyor (apt update)..."
-if [[ $EUID -ne 0 ]]; then
-    warn "Root değilsin — apt update atlanıyor."
-    hint "sudo bash setup.sh"
-else
-    apt-get update -qq && success "apt update tamam"
-fi
-
-# ── 2. Sistem Araçları Kontrolü ───────────────────────────
-echo ""
-log "Sistem araçları kontrol ediliyor..."
+log "Checking system tools..."
 echo ""
 
 MISSING_SYS=()
@@ -60,8 +50,8 @@ check_cmd() {
     if command -v "$cmd" &>/dev/null; then
         success "$cmd ✓"
     else
-        warn "$cmd bulunamadı"
-        hint "Kur: $install_hint"
+        warn "$cmd not found"
+        hint "Install: $install_hint"
         MISSING_SYS+=("$pkg")
     fi
 }
@@ -72,19 +62,19 @@ check_cmd "git"      "git"         "sudo apt install git"
 check_cmd "wget"     "wget"        "sudo apt install wget"
 check_cmd "nmap"     "nmap"        "sudo apt install nmap"
 
-# netexec / crackmapexec (SMB signing kontrolü için, opsiyonel)
+# netexec / crackmapexec (optional, for SMB signing check)
 if command -v netexec &>/dev/null; then
     success "netexec ✓"
 elif command -v crackmapexec &>/dev/null || command -v cme &>/dev/null; then
     success "crackmapexec ✓"
 else
-    warn "netexec / crackmapexec bulunamadı  (opsiyonel, SMB signing kontrolü için)"
-    hint "Kur: sudo apt install netexec"
+    warn "netexec / crackmapexec not found  (optional, for SMB signing check)"
+    hint "Install: sudo apt install netexec"
 fi
 
-# ── 3. Python Kütüphaneleri Kontrolü ─────────────────────
+# ── 2. Python Libraries Check ─────────────────────────────
 echo ""
-log "Python kütüphaneleri kontrol ediliyor..."
+log "Checking Python libraries..."
 echo ""
 
 MISSING_PY=()
@@ -95,8 +85,8 @@ check_py() {
     if python3 -c "import $module" 2>/dev/null; then
         success "python3: $module ✓"
     else
-        warn "python3: $module bulunamadı"
-        hint "Kur: pip3 install $pkg --break-system-packages"
+        warn "python3: $module not found"
+        hint "Install: pip3 install $pkg --break-system-packages"
         MISSING_PY+=("$pkg")
     fi
 }
@@ -105,122 +95,130 @@ check_py "impacket"  "impacket"
 check_py "colorama"  "colorama"
 check_py "dns"       "dnspython"
 
-# ── 4. Bağımlı Araçlar (exploit/ dizinine) ────────────────
+# ── 3. Dependencies (into exploit/ directory) ─────────────
 echo ""
-log "Bağımlı araçlar exploit/ dizinine alınıyor..."
+log "Fetching dependencies into exploit/ directory..."
 echo ""
 
-# ── 4a. ntlmrelayx.py ────────────────────────────────────
+# ── 3a. ntlmrelayx.py ────────────────────────────────────
 if [[ -f "$EXPLOITDIR/ntlmrelayx.py" ]]; then
-    success "ntlmrelayx.py zaten mevcut, atlanıyor"
+    success "ntlmrelayx.py already exists, skipping"
 else
-    log "ntlmrelayx.py sistem genelinde aranıyor..."
+    log "Searching for ntlmrelayx.py system-wide..."
     NTLM_PATH=$(find /usr -name "ntlmrelayx.py" 2>/dev/null | head -1)
 
     if [[ -n "$NTLM_PATH" ]]; then
         cp "$NTLM_PATH" "$EXPLOITDIR/"
-        success "ntlmrelayx.py kopyalandı: $NTLM_PATH → exploit/"
+        success "ntlmrelayx.py copied: $NTLM_PATH → exploit/"
     else
-        log "Bulunamadı, impacket reposu klonlanıyor..."
+        log "Not found, cloning impacket repository..."
         TMPDIR_IMPACKET="$WORKDIR/.tmp_impacket"
         [[ ! -d "$TMPDIR_IMPACKET" ]] && \
             git clone --quiet https://github.com/fortra/impacket "$TMPDIR_IMPACKET"
         find "$TMPDIR_IMPACKET" -name "ntlmrelayx.py" \
             -exec cp {} "$EXPLOITDIR/" \; 2>/dev/null
-        success "ntlmrelayx.py exploit/ dizinine kopyalandı"
+        success "ntlmrelayx.py copied into exploit/"
     fi
 fi
 
-# ── 4b. dnstool.py (krbrelayx) ───────────────────────────
-if [[ -f "$EXPLOITDIR/dnstool.py" ]]; then
-    success "dnstool.py zaten mevcut, atlanıyor"
+# ── 3b. dnstool.py + lib/ (krbrelayx) ────────────────────
+if [[ -f "$EXPLOITDIR/dnstool.py" && -d "$EXPLOITDIR/lib" ]]; then
+    success "dnstool.py + lib/ already exist, skipping"
 else
-    log "krbrelayx klonlanıyor (dnstool.py için)..."
+    log "Cloning krbrelayx (for dnstool.py + lib/)..."
     TMPDIR_KRB="$WORKDIR/.tmp_krbrelayx"
     if [[ ! -d "$TMPDIR_KRB" ]]; then
         git clone --quiet https://github.com/dirkjanm/krbrelayx "$TMPDIR_KRB"
     else
         cd "$TMPDIR_KRB" && git pull --quiet && cd "$WORKDIR"
     fi
+
+    # dnstool.py and lib/ always come from the same repo, copy both together
     cp "$TMPDIR_KRB/dnstool.py" "$EXPLOITDIR/"
-    success "dnstool.py exploit/ dizinine kopyalandı"
+    cp -r "$TMPDIR_KRB/lib" "$EXPLOITDIR/"
+    success "dnstool.py + lib/ copied into exploit/"
 fi
 
-# ── 4c. PetitPotam.py ────────────────────────────────────
+# ── 3c. PetitPotam.py ────────────────────────────────────
 if [[ -f "$EXPLOITDIR/PetitPotam.py" ]]; then
-    success "PetitPotam.py zaten mevcut, atlanıyor"
+    success "PetitPotam.py already exists, skipping"
 else
-    log "PetitPotam.py indiriliyor..."
+    log "Downloading PetitPotam.py..."
     wget -q \
         "https://raw.githubusercontent.com/topotam/PetitPotam/main/PetitPotam.py" \
         -O "$EXPLOITDIR/PetitPotam.py" \
-        && success "PetitPotam.py exploit/ dizinine indirildi" \
-        || fail "PetitPotam.py indirilemedi — ağ bağlantısını kontrol et."
+        && success "PetitPotam.py downloaded into exploit/" \
+        || fail "Failed to download PetitPotam.py — check your network connection."
 fi
 
-# ── 4d. cupntlm.py → exploit/ ────────────────────────────
+# ── 3d. cupntlm.py → exploit/ ────────────────────────────
 if [[ -f "$WORKDIR/cupntlm.py" ]]; then
     cp "$WORKDIR/cupntlm.py" "$EXPLOITDIR/"
-    success "cupntlm.py exploit/ dizinine kopyalandı"
+    success "cupntlm.py copied into exploit/"
 else
-    warn "cupntlm.py bulunamadı — exploit/ dizinine kopyalanamadı"
+    warn "cupntlm.py not found — could not copy into exploit/"
 fi
 
-# ── 5. Doğrulama ──────────────────────────────────────────
+# ── 4. Verification ───────────────────────────────────────
 echo ""
-log "Dosya doğrulaması yapılıyor..."
+log "Verifying files..."
 echo ""
 
 check_file() {
     if [[ -f "$EXPLOITDIR/$1" ]]; then
         success "exploit/$1 ✓"
     else
-        warn "exploit/$1 eksik!"
+        warn "exploit/$1 missing!"
     fi
 }
 
 check_file "cupntlm.py"
 check_file "ntlmrelayx.py"
 check_file "dnstool.py"
+if [[ -d "$EXPLOITDIR/lib" ]]; then
+    success "exploit/lib/ ✓"
+else
+    warn "exploit/lib/ missing!"
+fi
 check_file "PetitPotam.py"
 
-# ── 6. Özet ───────────────────────────────────────────────
+# ── 5. Summary ────────────────────────────────────────────
 echo ""
 echo -e "${CYAN}══════════════════════════════════════════════${NC}"
 
 if [[ ${#MISSING_SYS[@]} -gt 0 || ${#MISSING_PY[@]} -gt 0 ]]; then
-    echo -e "${YELLOW}  Kurulum tamamlandı — bazı bağımlılıklar eksik!${NC}"
+    echo -e "${YELLOW}  Setup complete — some dependencies are missing!${NC}"
     echo -e "${CYAN}══════════════════════════════════════════════${NC}"
     echo ""
     if [[ ${#MISSING_SYS[@]} -gt 0 ]]; then
-        echo -e "  ${YELLOW}Eksik sistem paketleri:${NC} ${MISSING_SYS[*]}"
+        echo -e "  ${YELLOW}Missing system packages:${NC} ${MISSING_SYS[*]}"
         hint "sudo apt install ${MISSING_SYS[*]}"
     fi
     if [[ ${#MISSING_PY[@]} -gt 0 ]]; then
-        echo -e "  ${YELLOW}Eksik Python kütüphaneleri:${NC} ${MISSING_PY[*]}"
+        echo -e "  ${YELLOW}Missing Python libraries:${NC} ${MISSING_PY[*]}"
         hint "pip3 install ${MISSING_PY[*]} --break-system-packages"
     fi
 else
-    echo -e "${GREEN}  Kurulum eksiksiz tamamlandı!${NC}"
+    echo -e "${GREEN}  Setup completed successfully!${NC}"
     echo -e "${CYAN}══════════════════════════════════════════════${NC}"
 fi
 
 echo ""
-echo -e "  ${CYAN}Kullanım:${NC}"
+echo -e "  ${CYAN}Usage:${NC}"
 echo ""
-echo -e "  ${YELLOW}# Önce izin kontrolü:${NC}"
+echo -e "  ${YELLOW}# Check permissions first:${NC}"
 echo -e "  cd exploit"
 echo -e "  sudo python3 cupntlm.py check \\"
 echo -e "    --domain lab.local --user pentester --pass 'P@ss' \\"
 echo -e "    --dc-ip 10.0.0.1 --relay-ip 192.168.1.100"
 echo ""
-echo -e "  ${YELLOW}# Per-target mod (her hedef için ayrı DNS kaydı):${NC}"
+echo -e "  ${YELLOW}# Per-target mode (separate DNS record per target):${NC}"
 echo -e "  sudo python3 cupntlm.py per-target \\"
 echo -e "    --targets targets.txt \\"
 echo -e "    --domain lab.local --user pentester --pass 'P@ss' \\"
 echo -e "    --dc-ip 10.0.0.1 --relay-ip 192.168.1.100 --loot loot.txt"
 echo ""
-echo -e "  ${YELLOW}# Single mod (tek DNS kaydı, kalıcı relay):${NC}"
+echo -e "  ${YELLOW}# Single mode (one DNS record, persistent relay):${NC}"
 echo -e "  sudo python3 cupntlm.py single \\"
 echo -e "    --targets targets.txt \\"
 echo -e "    --domain lab.local --user pentester --pass 'P@ss' \\"
