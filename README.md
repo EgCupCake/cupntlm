@@ -68,7 +68,7 @@ exploit/
 ## Installation
 
 ```bash
-git clone https://github.com/yourhandle/cupntlm
+git clone https://github.com/EgCupCake/cupntlm.git
 cd cupntlm
 sudo bash setup.sh
 ```
